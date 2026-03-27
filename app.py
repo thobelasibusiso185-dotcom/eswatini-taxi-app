@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 from models import db, RideRequest
 
 app = Flask(__name__)
+@app.route('/')
+def home():
+    return "<h1>SureRide API is Online</h1><p>The backend is working perfectly!</p>"
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sureride.db' # This creates a local database file
 db.init_app(app)
 
