@@ -37,6 +37,36 @@ def home():
 def register():
     data = request.get_json()
     
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    
+    # 1. Grab the phone and password from the Flutter app
+    phone = data.get('phone_number')
+    password = data.get('password')
+
+    # 2. Look for the user in our database
+    user = User.query.filter_by(phone_number=phone).first()
+
+    # 3. Validation: Does the user exist and does the password match?
+    # user.check_password compares the typed password to the hashed one
+    if user and user.check_password(password):
+        return jsonify({
+            "status": "success",
+            "message": f"Welcome back, {user.full_name}!",
+            "user": {
+                "id": user.id,
+                "full_name": user.full_name,
+                "user_type": user.user_type
+            }
+        }), 200
+    else:
+        # If the phone is wrong or the password doesn't match
+        return jsonify({
+            "status": "error", 
+            "message": "Invalid phone number or password"
+        }), 401
+    
     # Validation
     if not data or 'phone_number' not in data or 'password' not in data:
         return jsonify({"status": "error", "message": "Missing required fields"}), 400
