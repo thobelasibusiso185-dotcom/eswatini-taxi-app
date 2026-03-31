@@ -24,6 +24,7 @@ def book_ride():
     db.session.commit()
     return jsonify({"message": "Ride booked successfully!", "ride_id": new_ride.id})
     @app.route('/register', methods=['POST'])
+    
 def register():
     # 1. Get the JSON data from the request
     data = request.get_json()
