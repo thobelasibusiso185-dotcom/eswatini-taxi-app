@@ -1,71 +1,62 @@
 from flask import Flask, request, jsonify
-from models import db, RideRequest
+from flask_sql_alchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+
+# --- FIX: Ensure the key is exactly SQLALCHEMY_DATABASE_URI ---
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sureride.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# --- STEP 1: THE USER MODEL ---
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    full_name = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(20), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    user_type = db.Column(db.String(10), default='passenger')
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+# Create tables
+with app.app_context():
+    db.create_all()
+
+# --- STEP 2: THE ROUTES ---
 @app.route('/')
 def home():
-    return "<h1>SureRide API is Online</h1><p>The backend is working perfectly!</p>"
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sureride.db' # This creates a local database file
-db.init_app(app)
+    return jsonify({"message": "SureRide API is Online"})
 
-# Create the database tables
-with app.app_context():
-    db.create_all()
-
-@app.route('/book', methods=['POST'])
-def book_ride():
-    data = request.json
-    new_ride = RideRequest(
-        passenger_name=data['name'],
-        pickup_location=data['pickup'],
-        destination=data['destination']
-    )
-    db.session.add(new_ride)
-    db.session.commit()
-    return jsonify({"message": "Ride booked successfully!", "ride_id": new_ride.id})
-    
-with app.app_context():
-    db.create_all()
-    
 @app.route('/register', methods=['POST'])
 def register():
-    # 1. Get the JSON data from the request
     data = request.get_json()
     
-    # 2. Extract the info (name, phone, password)
-    full_name = data.get('name')
-    phone = data.get('phone')
-    password = data.get('password')
+    # Validation
+    if not data or 'phone_number' not in data or 'password' not in data:
+        return jsonify({"status": "error", "message": "Missing required fields"}), 400
 
-    # 3. Basic Validation
-    if not full_name or not phone or not password:
-        return jsonify({"error": "Missing required fields"}), 400
+    if User.query.filter_by(phone_number=data['phone_number']).first():
+        return jsonify({"status": "error", "message": "Phone number already registered"}), 400
 
-    # 4. Check if the phone number already exists in the DB
-    existing_user = User.query.filter_by(phone_number=phone).first()
-    if existing_user:
-        return jsonify({"error": "This phone number is already registered"}), 409
-
-    # 5. Create the new User object
-    new_user = User(
-        full_name=full_name,
-        phone_number=phone
-    )
-    
-    # 6. Hash the password (never store it as plain text!)
-    new_user.set_password(password)
-
-    # 7. Save to the database
     try:
+        new_user = User(
+            full_name=data.get('full_name', 'Unnamed User'),
+            phone_number=data['phone_number']
+        )
+        new_user.set_password(data['password'])
+
         db.session.add(new_user)
         db.session.commit()
-        return jsonify({
-            "message": "Registration successful!",
-            "user_id": new_user.id
-        }), 201
+        return jsonify({"status": "success", "message": "User registered successfully!"}), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": "Database error, please try again later"}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
